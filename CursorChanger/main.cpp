@@ -622,16 +622,16 @@ std::string OpenFileSelectDialog(const std::wstring& filter)
     // Display the Open dialog box
     if (GetOpenFileName(&ofn))
     {
-        // UTF-16¿¡¼­ UTF-8·Î º¯È¯ÇÏ±â À§ÇØ ÇÊ¿äÇÑ ¹öÆÛ Å©±â °è»ê
+        // UTF-16ì—ì„œ UTF-8ë¡œ ë³€í™˜í•˜ê¸° ìœ„í•´ í•„ìš”í•œ ë²„í¼ í¬ê¸° ê³„ì‚°
         int size_needed = WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, NULL, 0, NULL, NULL);
 
-        // ¹öÆÛ »ı¼º
+        // ë²„í¼ ìƒì„±
         std::string utf8_str(size_needed, 0);
 
-        // ½ÇÁ¦ º¯È¯ ¼öÇà
+        // ì‹¤ì œ ë³€í™˜ ìˆ˜í–‰
         WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, &utf8_str[0], size_needed, NULL, NULL);
 
-        // null Á¾·á ¹®ÀÚ Á¦°Å
+        // null ì¢…ë£Œ ë¬¸ì ì œê±°
         utf8_str.resize(size_needed - 1);
 
         return utf8_str;
