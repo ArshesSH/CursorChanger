@@ -15,6 +15,10 @@
 #include <string>
 #include <tchar.h>
 
+#include "CursorSettingUI.h"
+#include "FileSelector.h"
+#include "SettingManager.h"
+
 #ifdef _DEBUG
 #define DX12_ENABLE_DEBUG_LAYER
 #endif
@@ -121,7 +125,6 @@ FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // My functions
-static std::string OpenFileSelectDialog( const std::wstring& filter = L"" );
 static bool RestoreCursor();
 BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType);
 LONG WINAPI CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo);
@@ -212,11 +215,25 @@ int main(int, char**)
     bool shouldOpen = true;
 
     // My variables
+    SettingManager settingManager;
     std::string cursorFilePath;
     const auto curCursor = LoadCursor(nullptr, IDC_ARROW);
     g_defaultCursor = CopyCursor(curCursor);
     g_changedCursor = nullptr;
     std::string logText;
+    CursorSettingUI cursorSettingUI(settingManager.pCursorSetting,
+        [&]()
+        {
+            if (settingManager.UpdateSettingsFile(settingManager.settingsPath))
+            {
+                logText = "Settings updated successfully.";
+            }
+            else
+            {
+                logText = "Failed to update settings.";
+            }
+        }
+    );
 
     // Main loop
     bool done = false;
@@ -256,44 +273,54 @@ int main(int, char**)
         ImGui::SetNextWindowSize( windowSize, ImGuiCond_Always );
         if (ImGui::Begin("Cursor Tool", &shouldOpen))
         {
-            if (ImGui::Button( "Select Mouse Icon" ))
-            {
-                cursorFilePath = OpenFileSelectDialog();
-            }
-            ImGui::Text( "Selected file: %s", cursorFilePath.c_str());
-            if (ImGui::Button("Change Cursor"))
-            {
-                // Change system cursor
-                HCURSOR hCursor = (HCURSOR)LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
-                if (hCursor)
-                {
-                    if (!SetSystemCursor(hCursor,OCR_NORMAL))
-                    {
-                        DestroyCursor(hCursor);
-                        OutputDebugStringW(L"Failed to set system cursor\n");
-                    }
-                    else
-                    {
-                        if (g_changedCursor != nullptr)
-                        {
-                            DestroyCursor(g_changedCursor);
-                        }
-
-                        g_changedCursor = hCursor;
-                    }
-                }
-                else
-                {
-                    OutputDebugStringW(L"Fail to load cursor file\n");
-                    logText = "Failed to load cursor file: " + cursorFilePath;
-                }
-            }
-
-            if (ImGui::Button("Restore Mouse Icon"))
-            {
-                RestoreCursor();
-            }
-
+            cursorSettingUI.UpdateImGui();
+            
+            // if (ImGui::Button( "Select Mouse Icon" ))
+            // {
+            //     cursorFilePath =
+            //         FileSelector::OpenFileSelectDialog("Cursor Files", {"*.cur", "*.ani"});;
+            // }
+            // ImGui::SameLine();
+            // if (ImGui::Button("Save"))
+            // {
+            //     
+            // }
+            //
+            // ImGui::Text( "Selected file: %s", cursorFilePath.c_str());
+            // if (ImGui::Button("Change Cursor"))
+            // {
+            //     // Change system cursor
+            //     HCURSOR hCursor = (HCURSOR)LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
+            //     if (hCursor)
+            //     {
+            //         if (!SetSystemCursor(hCursor,OCR_NORMAL))
+            //         {
+            //             DestroyCursor(hCursor);
+            //             OutputDebugStringW(L"Failed to set system cursor\n");
+            //         }
+            //         else
+            //         {
+            //             if (g_changedCursor != nullptr)
+            //             {
+            //                 DestroyCursor(g_changedCursor);
+            //             }
+            //
+            //             g_changedCursor = hCursor;
+            //         }
+            //     }
+            //     else
+            //     {
+            //         OutputDebugStringW(L"Fail to load cursor file\n");
+            //         logText = "Failed to load cursor file: " + cursorFilePath;
+            //     }
+            // }
+            //
+            // if (ImGui::Button("Restore Mouse Icon"))
+            // {
+            //     RestoreCursor();
+            // }
+            //
+            ImGui::Separator();
             ImGui::Text(logText.c_str());
         }
         ImGui::End();
@@ -594,51 +621,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 
-std::string OpenFileSelectDialog(const std::wstring& filter)
-{
-    OPENFILENAME ofn;       // common dialog box structure
-    WCHAR szFile[260];      // buffer for file name
-    // Initialize OPENFILENAME
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;
-    ofn.lpstrFile = szFile;
-    ofn.lpstrFile[0] = '\0';
-    ofn.nMaxFile = sizeof(szFile);
-    if (filter.empty())
-    {
-        ofn.lpstrFilter = L"All Files (*.*)\0*.*\0";
-    }
-    else
-    {
-        ofn.lpstrFilter = filter.c_str();
-    }
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = nullptr;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = nullptr;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-    // Display the Open dialog box
-    if (GetOpenFileName(&ofn))
-    {
-        // UTF-16에서 UTF-8로 변환하기 위해 필요한 버퍼 크기 계산
-        int size_needed = WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, NULL, 0, NULL, NULL);
-
-        // 버퍼 생성
-        std::string utf8_str(size_needed, 0);
-
-        // 실제 변환 수행
-        WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, &utf8_str[0], size_needed, NULL, NULL);
-
-        // null 종료 문자 제거
-        utf8_str.resize(size_needed - 1);
-
-        return utf8_str;
-    }
-
-    return "";
-}
 
 bool RestoreCursor()
 {
