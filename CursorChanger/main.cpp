@@ -216,7 +216,6 @@ int main(int, char**)
 
     // My variables
     SettingManager settingManager;
-    std::string cursorFilePath;
     const auto curCursor = LoadCursor(nullptr, IDC_ARROW);
     g_defaultCursor = CopyCursor(curCursor);
     g_changedCursor = nullptr;
@@ -232,6 +231,37 @@ int main(int, char**)
             {
                 logText = "Failed to update settings.";
             }
+        },
+        [&]()
+        {
+            const std::string& cursorFilePath = settingManager.pCursorSetting->cursorPath;
+            HCURSOR hCursor = LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
+            if (hCursor)
+            {
+                if (!SetSystemCursor(hCursor, OCR_NORMAL))
+                {
+                    DestroyCursor(hCursor);
+                    OutputDebugStringW(L"Failed to set system cursor\n");
+                }
+                else
+                {
+                    if (g_changedCursor != nullptr)
+                    {
+                        DestroyCursor(g_changedCursor);
+                    }
+
+                    g_changedCursor = hCursor;
+                }
+            }
+            else
+            {
+                OutputDebugStringW(L"Fail to load cursor file\n");
+                logText = "Failed to load cursor file: " + cursorFilePath;
+            }
+        },
+        [&]()
+        {
+            RestoreCursor();
         }
     );
 

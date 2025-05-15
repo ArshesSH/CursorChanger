@@ -10,7 +10,7 @@ CursorSettingUI::~CursorSettingUI()
 void CursorSettingUI::UpdateImGui()
 {
     ImGui::Text("[Cursor setting]");
-    if (ImGui::Button("Change cursor"))
+    if (ImGui::Button("Select cursor path"))
     {
         pCursorSetting->cursorPath = FileSelector::OpenFileSelectDialog("Cursor Files", {"*.cur", "*.ani"});
     }
@@ -18,17 +18,25 @@ void CursorSettingUI::UpdateImGui()
     ImGui::Text("Target process: %s", pCursorSetting->targetProcess.c_str());
     if (ImGui::Button("Save") )
     {
-        if (OnClickSaveSetting != nullptr)
+        if (onClickSaveSetting != nullptr)
         {
-            OnClickSaveSetting();
+            onClickSaveSetting();
         }
     }
     ImGui::Separator();
     if (ImGui::Button("Change Cursor"))
     {
-        if (OnClickChangeCursor != nullptr)
+        if (onClickChangeCursor != nullptr)
         {
-            OnClickChangeCursor();
+            onClickChangeCursor();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Restore Cursor"))
+    {
+        if (onClickRestoreCursor != nullptr)
+        {
+            onClickRestoreCursor();
         }
     }
 }

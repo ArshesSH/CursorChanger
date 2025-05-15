@@ -9,11 +9,15 @@ class CursorSettingUI
 public:
     CursorSettingUI(const std::shared_ptr<CursorSetting>& pCursorSetting, 
                     const std::function<void()>& onClickSaveSetting = nullptr,
-                    const std::function<void()>& onClickChangeCursor = nullptr)
-        : pCursorSetting(pCursorSetting),
-          OnClickSaveSetting(onClickSaveSetting),
-          OnClickChangeCursor(onClickChangeCursor)
+                    const std::function<void()>& onClickChangeCursor = nullptr,
+                    const std::function<void()>& onClickRestoreCursor = nullptr)
+    :
+        pCursorSetting(pCursorSetting),
+        onClickSaveSetting(onClickSaveSetting),
+        onClickChangeCursor(onClickChangeCursor),
+        onClickRestoreCursor(onClickRestoreCursor)
     {}
+    
     ~CursorSettingUI();
     
     void UpdateImGui();
@@ -22,6 +26,7 @@ private:
     std::shared_ptr<CursorSetting> pCursorSetting;
     
     // Interface
-    std::function<void()> OnClickSaveSetting;
-    std::function<void()> OnClickChangeCursor;
+    std::function<void()> onClickSaveSetting;
+    std::function<void()> onClickChangeCursor;
+    std::function<void()> onClickRestoreCursor;
 };
