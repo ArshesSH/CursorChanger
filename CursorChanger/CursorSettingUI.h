@@ -3,8 +3,11 @@
 #include <memory>
 
 #include "CursorSetting.h"
+#include "ImGuiBaseUI.h"
+#include "ProcessSelector.h"
+#include "SelectorUI.h"
 
-class CursorSettingUI
+class CursorSettingUI : public ImGuiBaseUI
 {
 public:
     CursorSettingUI(const std::shared_ptr<CursorSetting>& pCursorSetting, 
@@ -16,15 +19,24 @@ public:
         onClickSaveSetting(onClickSaveSetting),
         onClickChangeCursor(onClickChangeCursor),
         onClickRestoreCursor(onClickRestoreCursor)
-    {}
+    {
+        if (processNameBuffer[0] == 0 && !pCursorSetting->targetProcess.empty()) {
+            strcpy_s(processNameBuffer, pCursorSetting->targetProcess.c_str());
+        }
+
+        spaceSize = ImVec2(0, SPACE_SIZE);
+    }
     
     ~CursorSettingUI();
     
-    void UpdateImGui();
+    void UpdateImGui() override;
 
 private:
-    std::shared_ptr<CursorSetting> pCursorSetting;
+    static constexpr float SPACE_SIZE = 30.0f;
     
+    std::shared_ptr<CursorSetting> pCursorSetting;
+    char processNameBuffer[256] = { 0 };
+    ImVec2 spaceSize;
     // Interface
     std::function<void()> onClickSaveSetting;
     std::function<void()> onClickChangeCursor;

@@ -11,12 +11,10 @@
 #include "imgui_impl_dx12.h"
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <iostream>
 #include <string>
 #include <tchar.h>
 
 #include "CursorSettingUI.h"
-#include "FileSelector.h"
 #include "SettingManager.h"
 
 #ifdef _DEBUG
@@ -140,7 +138,12 @@ int main(int, char**)
     //ImGui_ImplWin32_EnableDpiAwareness();
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX12 Example", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName,
+        L"Cursor Changer", WS_OVERLAPPEDWINDOW,
+        100, 100, screenWidth / 2, screenHeight / 2, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -298,60 +301,15 @@ int main(int, char**)
         float windowWidth = static_cast<float>(GetSystemMetrics( SM_CXSCREEN ));
         float windowHeight = static_cast<float>(GetSystemMetrics( SM_CYSCREEN ));
         ImVec2 windowSize = ImVec2( windowWidth, windowHeight );
-
+        
         ImGui::SetNextWindowPos( ImVec2( 0, 0 ), ImGuiCond_Always );
         ImGui::SetNextWindowSize( windowSize, ImGuiCond_Always );
         if (ImGui::Begin("Cursor Tool", &shouldOpen))
         {
             cursorSettingUI.UpdateImGui();
-            
-            // if (ImGui::Button( "Select Mouse Icon" ))
-            // {
-            //     cursorFilePath =
-            //         FileSelector::OpenFileSelectDialog("Cursor Files", {"*.cur", "*.ani"});;
-            // }
-            // ImGui::SameLine();
-            // if (ImGui::Button("Save"))
-            // {
-            //     
-            // }
-            //
-            // ImGui::Text( "Selected file: %s", cursorFilePath.c_str());
-            // if (ImGui::Button("Change Cursor"))
-            // {
-            //     // Change system cursor
-            //     HCURSOR hCursor = (HCURSOR)LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
-            //     if (hCursor)
-            //     {
-            //         if (!SetSystemCursor(hCursor,OCR_NORMAL))
-            //         {
-            //             DestroyCursor(hCursor);
-            //             OutputDebugStringW(L"Failed to set system cursor\n");
-            //         }
-            //         else
-            //         {
-            //             if (g_changedCursor != nullptr)
-            //             {
-            //                 DestroyCursor(g_changedCursor);
-            //             }
-            //
-            //             g_changedCursor = hCursor;
-            //         }
-            //     }
-            //     else
-            //     {
-            //         OutputDebugStringW(L"Fail to load cursor file\n");
-            //         logText = "Failed to load cursor file: " + cursorFilePath;
-            //     }
-            // }
-            //
-            // if (ImGui::Button("Restore Mouse Icon"))
-            // {
-            //     RestoreCursor();
-            // }
-            //
-            ImGui::Separator();
-            ImGui::Text(logText.c_str());
+
+            // Debugger
+            ImGui::Text("Log: %s", logText.c_str());
         }
         ImGui::End();
 
@@ -386,8 +344,8 @@ int main(int, char**)
         g_pd3dCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_pd3dCommandList);
 
         // Present
-        HRESULT hr = g_pSwapChain->Present(1, 0);   // Present with vsync
-        //HRESULT hr = g_pSwapChain->Present(0, 0); // Present without vsync
+        //HRESULT hr = g_pSwapChain->Present(1, 0);   // Present with vsync
+        HRESULT hr = g_pSwapChain->Present(0, 0); // Present without vsync
         g_SwapChainOccluded = (hr == DXGI_STATUS_OCCLUDED);
 
         UINT64 fenceValue = g_fenceLastSignaledValue + 1;

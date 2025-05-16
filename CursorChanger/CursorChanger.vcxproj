@@ -138,6 +138,7 @@
     <ClCompile Include="CursorSetting.cpp" />
     <ClCompile Include="CursorSettingUI.cpp" />
     <ClCompile Include="FileSelector.cpp" />
+    <ClCompile Include="ImGuiBaseUI.cpp" />
     <ClCompile Include="libs\imgui\backends\imgui_impl_dx12.cpp" />
     <ClCompile Include="libs\imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="libs\imgui\imgui.cpp" />
@@ -146,12 +147,15 @@
     <ClCompile Include="libs\imgui\imgui_tables.cpp" />
     <ClCompile Include="libs\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ProcessSelector.cpp" />
+    <ClCompile Include="SelectorUI.cpp" />
     <ClCompile Include="SettingManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CursorSetting.h" />
     <ClInclude Include="CursorSettingUI.h" />
     <ClInclude Include="FileSelector.h" />
+    <ClInclude Include="ImGuiBaseUI.h" />
     <ClInclude Include="libs\imgui\backends\imgui_impl_dx12.h" />
     <ClInclude Include="libs\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="libs\imgui\imconfig.h" />
@@ -160,6 +164,8 @@
     <ClInclude Include="libs\imgui\imstb_rectpack.h" />
     <ClInclude Include="libs\imgui\imstb_textedit.h" />
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
+    <ClInclude Include="ProcessSelector.h" />
+    <ClInclude Include="SelectorUI.h" />
     <ClInclude Include="SettingManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
