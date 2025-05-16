@@ -5,7 +5,6 @@
 #include "CursorSetting.h"
 #include "ImGuiBaseUI.h"
 #include "ProcessManager.h"
-#include "SelectorUI.h"
 
 class CursorSettingUI : public ImGuiBaseUI
 {
