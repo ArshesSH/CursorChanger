@@ -13,12 +13,14 @@ public:
     CursorSettingUI(const std::shared_ptr<CursorSetting>& pCursorSetting, 
                     const std::function<void()>& onClickSaveSetting = nullptr,
                     const std::function<void()>& onClickChangeCursor = nullptr,
-                    const std::function<void()>& onClickRestoreCursor = nullptr)
+                    const std::function<void()>& onClickRestoreCursor = nullptr,
+                    const std::function<void()>& onClickFocusOnly = nullptr)
     :
         pCursorSetting(pCursorSetting),
         onClickSaveSetting(onClickSaveSetting),
         onClickChangeCursor(onClickChangeCursor),
-        onClickRestoreCursor(onClickRestoreCursor)
+        onClickRestoreCursor(onClickRestoreCursor),
+        onClickFocusOnly(onClickFocusOnly)
     {
         if (processNameBuffer[0] == 0 && !pCursorSetting->targetProcess.empty()) {
             strcpy_s(processNameBuffer, pCursorSetting->targetProcess.c_str());
@@ -41,4 +43,5 @@ private:
     std::function<void()> onClickSaveSetting;
     std::function<void()> onClickChangeCursor;
     std::function<void()> onClickRestoreCursor;
+    std::function<void()> onClickFocusOnly;
 };

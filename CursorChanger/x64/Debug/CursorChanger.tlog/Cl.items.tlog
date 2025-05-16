@@ -12,7 +12,7 @@ C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_draw.cpp;C:\Project
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_tables.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_tables.obj
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_widgets.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_widgets.obj
 C:\Projects\C++\CursorChanger\CursorChanger\main.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\main.obj
-C:\Projects\C++\CursorChanger\CursorChanger\ProcessSelector.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\ProcessSelector.obj
+C:\Projects\C++\CursorChanger\CursorChanger\ProcessManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\ProcessManager.obj
 C:\Projects\C++\CursorChanger\CursorChanger\SelectorUI.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SelectorUI.obj
 C:\Projects\C++\CursorChanger\CursorChanger\SettingManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SettingManager.obj
 C:\Projects\C++\CursorChanger\CursorChanger\SystemTrayManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SystemTrayManager.obj

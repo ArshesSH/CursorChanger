@@ -115,6 +115,7 @@ static std::unique_ptr<SystemTrayManager> g_pTrayManager;
 static std::unique_ptr<ProcessManager> g_pProcessManager;
 static std::unique_ptr<SettingManager> g_pSettingManager;
 static constexpr unsigned int MONITORING_TIME = 1;
+static HWINEVENTHOOK g_hWinEventHook = nullptr;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -124,7 +125,9 @@ void CleanupRenderTarget();
 void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+static void SetEnableProcessMonitoring(HWND hwnd, bool enable);
 void MonitorProcessAndChangeCursor();
+void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 
 // Main code
 int main(int, char**)
@@ -132,6 +135,8 @@ int main(int, char**)
     // Add handlers
     SetConsoleCtrlHandler(CursorChanger::ConsoleCtrlHandler, TRUE);
     SetUnhandledExceptionFilter(CursorChanger::CursorUnhandledExceptionFilter);
+
+    g_hWinEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, CursorFocusEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
     // Create application window
     //ImGui_ImplWin32_EnableDpiAwareness();
@@ -142,7 +147,7 @@ int main(int, char**)
 
     HWND hwnd = ::CreateWindowW(wc.lpszClassName,
         g_appVersion.c_str(), WS_OVERLAPPEDWINDOW,
-        100, 100, screenWidth / 2, screenHeight / 2, nullptr, nullptr, wc.hInstance, nullptr);
+        100, 100, screenWidth / 3, screenHeight / 2, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -239,8 +244,21 @@ int main(int, char**)
         [&]()
         {
             CursorChanger::RestoreCursor();
+        },
+        [&]()
+        {
+            if (g_pSettingManager->pCursorSetting->isFocusOnly)
+            {
+                SetEnableProcessMonitoring(hwnd, false);
+            }
+            else
+            {
+                SetEnableProcessMonitoring(hwnd, true);
+            }
         }
     );
+
+    SetEnableProcessMonitoring(hwnd, !g_pSettingManager->pCursorSetting->isFocusOnly);
 
     // Main loop
     bool done = false;
@@ -329,6 +347,11 @@ int main(int, char**)
     WaitForLastSubmittedFrame();
 
     // Cleanup
+    if (g_hWinEventHook)
+    {
+        UnhookWinEvent(g_hWinEventHook);
+        g_hWinEventHook = nullptr;
+    }
     CursorChanger::RestoreCursor();
     
     ImGui_ImplDX12_Shutdown();
@@ -562,17 +585,24 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     switch (msg)
     {
+    case WM_TIMER:
+        if (wParam == 1)
+        {
+            MonitorProcessAndChangeCursor();
+        }
+        return 0;
     case WM_CREATE:
         {
-            HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APPLICATION));
+            HCURSOR hCursor = LoadCursor(nullptr, IDC_ARROW);
+            HICON hIcon = CopyIcon(hCursor);
             g_pTrayManager = std::make_unique<SystemTrayManager>(hWnd, hIcon, "Cursor Changer");
             g_pTrayManager->SetOnDoubleClickCallback([hWnd]()
             {
                 ShowWindow(hWnd, SW_RESTORE);
                 g_pTrayManager->RemoveFromTray();
             });
-
-            SetTimer(hWnd, 1, 1000, nullptr);
+            SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+            SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             return 0;
         }
     case WM_SIZE:
@@ -610,12 +640,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
             return 0;
         break;
-    case WM_TIMER:
-        if (wParam == 1)
-        {
-            MonitorProcessAndChangeCursor();
-        }
-        return 0;
     case WM_DESTROY:
         KillTimer(hWnd, 1);
         
@@ -629,6 +653,74 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
+{
+    if (g_pSettingManager == nullptr || g_pCursorChanger == nullptr)
+    {
+        return;
+    }
+
+    if (g_pSettingManager->pCursorSetting->shouldChangeByProcess == false)
+    {
+        return;
+    }
+
+    if (g_pSettingManager->pCursorSetting->isFocusOnly == false)
+    {
+        return;
+    }
+    
+    if (event == EVENT_SYSTEM_FOREGROUND)
+    {
+        DWORD processId;
+        GetWindowThreadProcessId(hwnd, &processId);
+
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        if (hProcess)
+        {
+            char processName[MAX_PATH] = "";
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameA(hProcess, 0, processName, &size))
+            {
+                std::string processNameStr(processName);
+                std::string targetProcessName = g_pSettingManager->pCursorSetting->targetProcess;
+
+                if (processNameStr.find(targetProcessName) != std::string::npos)
+                {
+                    g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
+                }
+                else
+                {
+                    CursorChanger::RestoreCursor();
+                }
+            }
+
+            CloseHandle(hProcess);
+        }
+    }
+}
+
+static void SetEnableProcessMonitoring(HWND hwnd, bool enable)
+{
+    if (enable)
+    {
+        SetTimer(hwnd, 1, MONITORING_TIME * 1000, nullptr);
+        Debugger::Log("Process monitoring enabled.");
+    }
+    else
+    {
+        if (KillTimer(hwnd, 1) == 0)
+        {
+            Debugger::Log("Failed to kill timer.");
+        }
+        else
+        {
+            Debugger::Log("Timer killed successfully.");
+        }
+        
+    }
 }
 
 void MonitorProcessAndChangeCursor()

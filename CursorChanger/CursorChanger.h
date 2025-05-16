@@ -24,7 +24,6 @@ public:
     static bool RestoreCursor();
     static bool IsCursorChanged();
     bool ChangeCursor(const std::string& cursorFilePath);
-
     
 private:
     static HCURSOR defaultCursor;

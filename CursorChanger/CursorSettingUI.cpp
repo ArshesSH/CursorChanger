@@ -1,5 +1,6 @@
 #include "CursorSettingUI.h"
 
+#include "Debugger.h"
 #include "FileSelector.h"
 #include "imgui.h"
 #include "SelectorUI.h"
@@ -31,7 +32,10 @@ void CursorSettingUI::UpdateImGui()
     {
         if (ImGui::Checkbox("Focus only", &pCursorSetting->isFocusOnly))
         {
-            // Handle focus only checkbox change if needed
+            if (onClickFocusOnly != nullptr)
+            {
+                onClickFocusOnly();
+            }
         }
         ImGui::SetItemTooltip("Focus only", "Change cursor only when the target process is in focus");
         ImGui::Dummy(spaceSize);
