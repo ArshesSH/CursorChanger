@@ -54,6 +54,11 @@ bool CursorChanger::RestoreCursor()
     return true;
 }
 
+bool CursorChanger::IsCursorChanged()
+{
+    return changedCursor != nullptr;
+}
+
 bool CursorChanger::ChangeCursor(const std::string& cursorFilePath)
 {
     HCURSOR hCursor = LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());

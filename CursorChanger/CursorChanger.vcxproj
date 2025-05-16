@@ -149,9 +149,10 @@
     <ClCompile Include="libs\imgui\imgui_tables.cpp" />
     <ClCompile Include="libs\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="ProcessSelector.cpp" />
+    <ClCompile Include="ProcessManager.cpp" />
     <ClCompile Include="SelectorUI.cpp" />
     <ClCompile Include="SettingManager.cpp" />
+    <ClCompile Include="SystemTrayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CursorChanger.h" />
@@ -168,9 +169,10 @@
     <ClInclude Include="libs\imgui\imstb_rectpack.h" />
     <ClInclude Include="libs\imgui\imstb_textedit.h" />
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
-    <ClInclude Include="ProcessSelector.h" />
+    <ClInclude Include="ProcessManager.h" />
     <ClInclude Include="SelectorUI.h" />
     <ClInclude Include="SettingManager.h" />
+    <ClInclude Include="SystemTrayManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

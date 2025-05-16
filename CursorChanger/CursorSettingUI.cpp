@@ -20,10 +20,22 @@ void CursorSettingUI::UpdateImGui()
     
     ImGui::Dummy(spaceSize);
     ImGui::SeparatorText("Auto change");
-    ImGui::Checkbox("Auto change cursor by process", &pCursorSetting->shouldChangeByProcess);
-
+    if (ImGui::Checkbox("Auto change cursor by process", &pCursorSetting->shouldChangeByProcess))
+    {
+        if (pCursorSetting->shouldChangeByProcess == false)
+        {
+            onClickRestoreCursor();
+        }
+    }
     if (pCursorSetting->shouldChangeByProcess)
     {
+        if (ImGui::Checkbox("Focus only", &pCursorSetting->isFocusOnly))
+        {
+            // Handle focus only checkbox change if needed
+        }
+        ImGui::SetItemTooltip("Focus only", "Change cursor only when the target process is in focus");
+        ImGui::Dummy(spaceSize);
+
         ImGui::Text("Process Name:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(300.0f);
@@ -32,6 +44,7 @@ void CursorSettingUI::UpdateImGui()
             pCursorSetting->targetProcess = processNameBuffer;
         }
         ImGui::Text("Target process: %s", pCursorSetting->targetProcess.c_str());
+        ImGui::SameLine();
     }
     
     ImGui::Dummy(spaceSize);

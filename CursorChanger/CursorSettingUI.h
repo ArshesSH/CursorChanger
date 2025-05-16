@@ -4,7 +4,7 @@
 
 #include "CursorSetting.h"
 #include "ImGuiBaseUI.h"
-#include "ProcessSelector.h"
+#include "ProcessManager.h"
 #include "SelectorUI.h"
 
 class CursorSettingUI : public ImGuiBaseUI
@@ -27,7 +27,7 @@ public:
         spaceSize = ImVec2(0, SPACE_SIZE);
     }
     
-    ~CursorSettingUI();
+    ~CursorSettingUI() override;
     
     void UpdateImGui() override;
 

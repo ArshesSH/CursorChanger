@@ -18,6 +18,7 @@
 #include "CursorSettingUI.h"
 #include "Debugger.h"
 #include "SettingManager.h"
+#include "SystemTrayManager.h"
 
 #ifdef _DEBUG
 #define DX12_ENABLE_DEBUG_LAYER
@@ -110,6 +111,10 @@ static const std::wstring g_version = L"v1.0.0";
 static const std::wstring g_appName = L"CursorChanger";
 static const std::wstring g_appVersion = g_appName + L" " + g_version;
 static std::unique_ptr<CursorChanger> g_pCursorChanger;
+static std::unique_ptr<SystemTrayManager> g_pTrayManager;
+static std::unique_ptr<ProcessManager> g_pProcessManager;
+static std::unique_ptr<SettingManager> g_pSettingManager;
+static constexpr unsigned int MONITORING_TIME = 1;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -119,6 +124,7 @@ void CleanupRenderTarget();
 void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void MonitorProcessAndChangeCursor();
 
 // Main code
 int main(int, char**)
@@ -209,14 +215,15 @@ int main(int, char**)
     bool shouldOpen = true;
 
     // My variables
-    SettingManager settingManager;
     g_pCursorChanger = std::make_unique<CursorChanger>();
+    g_pSettingManager = std::make_unique<SettingManager>();
+    g_pProcessManager = std::make_unique<ProcessManager>();
     Debugger debugger;
     
-    CursorSettingUI cursorSettingUI(settingManager.pCursorSetting,
+    CursorSettingUI cursorSettingUI(g_pSettingManager->pCursorSetting,
         [&]()
         {
-            if (settingManager.UpdateSettingsFile(settingManager.settingsPath))
+            if (g_pSettingManager->UpdateSettingsFile(g_pSettingManager->settingsPath))
             {
                 Debugger::Log("Settings updated successfully.");
             }
@@ -227,11 +234,11 @@ int main(int, char**)
         },
         [&]()
         {
-            g_pCursorChanger->ChangeCursor(settingManager.pCursorSetting->cursorPath);
+            g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
         },
         [&]()
         {
-            g_pCursorChanger->RestoreCursor();
+            CursorChanger::RestoreCursor();
         }
     );
 
@@ -309,8 +316,8 @@ int main(int, char**)
         g_pd3dCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_pd3dCommandList);
 
         // Present
-        //HRESULT hr = g_pSwapChain->Present(1, 0);   // Present with vsync
-        HRESULT hr = g_pSwapChain->Present(0, 0); // Present without vsync
+        HRESULT hr = g_pSwapChain->Present(1, 0);   // Present with vsync
+        //HRESULT hr = g_pSwapChain->Present(0, 0); // Present without vsync
         g_SwapChainOccluded = (hr == DXGI_STATUS_OCCLUDED);
 
         UINT64 fenceValue = g_fenceLastSignaledValue + 1;
@@ -548,11 +555,26 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    if (g_pTrayManager && g_pTrayManager->ProcessMessage(msg, wParam, lParam))
+        return 0;
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
         return true;
 
     switch (msg)
     {
+    case WM_CREATE:
+        {
+            HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APPLICATION));
+            g_pTrayManager = std::make_unique<SystemTrayManager>(hWnd, hIcon, "Cursor Changer");
+            g_pTrayManager->SetOnDoubleClickCallback([hWnd]()
+            {
+                ShowWindow(hWnd, SW_RESTORE);
+                g_pTrayManager->RemoveFromTray();
+            });
+
+            SetTimer(hWnd, 1, 1000, nullptr);
+            return 0;
+        }
     case WM_SIZE:
         if (g_pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
         {
@@ -562,14 +584,91 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             assert(SUCCEEDED(result) && "Failed to resize swapchain.");
             CreateRenderTarget();
         }
+
+        if (wParam == SIZE_MINIMIZED)
+        {
+            ShowWindow(hWnd, SW_HIDE);
+            g_pTrayManager->AddToTray();
+        }
         return 0;
+    case WM_COMMAND:
+        {
+            switch (LOWORD(wParam))
+            {
+            case 1:
+                ShowWindow(hWnd, SW_RESTORE);
+                g_pTrayManager->RemoveFromTray();
+                break;
+            case 2:
+                DestroyWindow(hWnd);
+                break;
+            default: ;
+            }
+            return 0;
+        }
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
             return 0;
         break;
+    case WM_TIMER:
+        if (wParam == 1)
+        {
+            MonitorProcessAndChangeCursor();
+        }
+        return 0;
     case WM_DESTROY:
+        KillTimer(hWnd, 1);
+        
+        if (g_pTrayManager)
+        {
+            g_pTrayManager->RemoveFromTray();
+            g_pTrayManager.reset();
+        }
+        
         ::PostQuitMessage(0);
         return 0;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+void MonitorProcessAndChangeCursor()
+{
+    if (g_pProcessManager == nullptr || g_pSettingManager == nullptr)
+    {
+        return;
+    }
+
+    if (g_pSettingManager->pCursorSetting->shouldChangeByProcess == false)
+    {
+        return;
+    }
+
+    static auto lastCheckTime = std::chrono::steady_clock::now();
+    auto currentTime = std::chrono::steady_clock::now();
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastCheckTime);
+    if (elapsedTime < std::chrono::seconds(MONITORING_TIME))
+    {
+        return;
+    }
+
+    lastCheckTime = currentTime;
+    
+    const std::string& targetProcessName = g_pSettingManager->pCursorSetting->targetProcess;
+    if (targetProcessName.empty())
+    {
+        return;
+    }
+    
+    g_pProcessManager->UpdateProcesses();
+    if (g_pProcessManager->IsProcessRunning(targetProcessName) == false)
+    {
+        return;
+    }
+
+    if (CursorChanger::IsCursorChanged())
+    {
+        return;
+    }
+
+    g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
 }

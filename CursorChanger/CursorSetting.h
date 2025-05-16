@@ -14,4 +14,5 @@ public:
     std::string cursorPath;
     std::string targetProcess;
     bool shouldChangeByProcess;
+    bool isFocusOnly;
 };

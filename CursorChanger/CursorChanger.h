@@ -19,12 +19,12 @@ public:
     CursorChanger();
     ~CursorChanger();
 
-public:
     static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType);
     static LONG WINAPI CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo);
     static bool RestoreCursor();
-    static void Initialize();
+    static bool IsCursorChanged();
     bool ChangeCursor(const std::string& cursorFilePath);
+
     
 private:
     static HCURSOR defaultCursor;
