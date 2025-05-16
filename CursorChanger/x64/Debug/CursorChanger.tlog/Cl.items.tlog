@@ -1,3 +1,9 @@
+C:\Projects\C++\CursorChanger\CursorChanger\CursorChanger.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\CursorChanger.obj
+C:\Projects\C++\CursorChanger\CursorChanger\CursorSetting.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\CursorSetting.obj
+C:\Projects\C++\CursorChanger\CursorChanger\CursorSettingUI.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\CursorSettingUI.obj
+C:\Projects\C++\CursorChanger\CursorChanger\Debugger.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\Debugger.obj
+C:\Projects\C++\CursorChanger\CursorChanger\FileSelector.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\FileSelector.obj
+C:\Projects\C++\CursorChanger\CursorChanger\ImGuiBaseUI.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\ImGuiBaseUI.obj
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\backends\imgui_impl_dx12.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_impl_dx12.obj
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\backends\imgui_impl_win32.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_impl_win32.obj
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui.obj
@@ -6,3 +12,7 @@ C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_draw.cpp;C:\Project
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_tables.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_tables.obj
 C:\Projects\C++\CursorChanger\CursorChanger\libs\imgui\imgui_widgets.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\imgui_widgets.obj
 C:\Projects\C++\CursorChanger\CursorChanger\main.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\main.obj
+C:\Projects\C++\CursorChanger\CursorChanger\ProcessManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\ProcessManager.obj
+C:\Projects\C++\CursorChanger\CursorChanger\SelectorUI.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SelectorUI.obj
+C:\Projects\C++\CursorChanger\CursorChanger\SettingManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SettingManager.obj
+C:\Projects\C++\CursorChanger\CursorChanger\SystemTrayManager.cpp;C:\Projects\C++\CursorChanger\CursorChanger\x64\Debug\SystemTrayManager.obj

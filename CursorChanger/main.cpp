@@ -11,9 +11,14 @@
 #include "imgui_impl_dx12.h"
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <iostream>
 #include <string>
 #include <tchar.h>
+
+#include "CursorChanger.h"
+#include "CursorSettingUI.h"
+#include "Debugger.h"
+#include "SettingManager.h"
+#include "SystemTrayManager.h"
 
 #ifdef _DEBUG
 #define DX12_ENABLE_DEBUG_LAYER
@@ -28,14 +33,6 @@
 static const int APP_NUM_FRAMES_IN_FLIGHT = 2;
 static const int APP_NUM_BACK_BUFFERS = 2;
 static const int APP_SRV_HEAP_SIZE = 64;
-
-
-static constexpr DWORD OCR_NORMAL =        32512;
-static constexpr DWORD OCR_IBEAM  =         32513;
-static constexpr DWORD OCR_WAIT   =         32514;
-static constexpr DWORD OCR_CROSS =          32515;
-static constexpr DWORD OCR_UP     =         32516;
-static constexpr DWORD OCR_HAND  =          32649;
 
 struct FrameContext
 {
@@ -108,8 +105,17 @@ static ID3D12Resource*              g_mainRenderTargetResource[APP_NUM_BACK_BUFF
 static D3D12_CPU_DESCRIPTOR_HANDLE  g_mainRenderTargetDescriptor[APP_NUM_BACK_BUFFERS] = {};
 
 // My static variables
-static HCURSOR g_defaultCursor = nullptr;
-static HCURSOR g_changedCursor = nullptr;
+// static HCURSOR g_defaultCursor = nullptr;
+// static HCURSOR g_changedCursor = nullptr;
+static const std::wstring g_version = L"v1.0.0";
+static const std::wstring g_appName = L"CursorChanger";
+static const std::wstring g_appVersion = g_appName + L" " + g_version;
+static std::unique_ptr<CursorChanger> g_pCursorChanger;
+static std::unique_ptr<SystemTrayManager> g_pTrayManager;
+static std::unique_ptr<ProcessManager> g_pProcessManager;
+static std::unique_ptr<SettingManager> g_pSettingManager;
+static constexpr unsigned int MONITORING_TIME = 1;
+static HWINEVENTHOOK g_hWinEventHook = nullptr;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -119,25 +125,29 @@ void CleanupRenderTarget();
 void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-// My functions
-static std::string OpenFileSelectDialog( const std::wstring& filter = L"" );
-static bool RestoreCursor();
-BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType);
-LONG WINAPI CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo);
+static void SetEnableProcessMonitoring(HWND hwnd, bool enable);
+void MonitorProcessAndChangeCursor();
+void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 
 // Main code
 int main(int, char**)
 {
     // Add handlers
-    SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
-    SetUnhandledExceptionFilter(CursorUnhandledExceptionFilter);
+    SetConsoleCtrlHandler(CursorChanger::ConsoleCtrlHandler, TRUE);
+    SetUnhandledExceptionFilter(CursorChanger::CursorUnhandledExceptionFilter);
+
+    g_hWinEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, CursorFocusEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
     // Create application window
     //ImGui_ImplWin32_EnableDpiAwareness();
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX12 Example", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName,
+        g_appVersion.c_str(), WS_OVERLAPPEDWINDOW,
+        100, 100, screenWidth / 3, screenHeight / 2, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -197,9 +207,7 @@ int main(int, char**)
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
     //IM_ASSERT(font != nullptr);
 
-
     static ImFont* g_gulimFont = nullptr;
-
     g_gulimFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\gulim.ttc", 16.0f, nullptr, io.Fonts->GetGlyphRangesKorean());
     if (g_gulimFont == nullptr) {
         OutputDebugStringW(L"Failed to load Gulim font\n");
@@ -212,11 +220,45 @@ int main(int, char**)
     bool shouldOpen = true;
 
     // My variables
-    std::string cursorFilePath;
-    const auto curCursor = LoadCursor(nullptr, IDC_ARROW);
-    g_defaultCursor = CopyCursor(curCursor);
-    g_changedCursor = nullptr;
-    std::string logText;
+    g_pCursorChanger = std::make_unique<CursorChanger>();
+    g_pSettingManager = std::make_unique<SettingManager>();
+    g_pProcessManager = std::make_unique<ProcessManager>();
+    Debugger debugger;
+    
+    CursorSettingUI cursorSettingUI(g_pSettingManager->pCursorSetting,
+        [&]()
+        {
+            if (g_pSettingManager->UpdateSettingsFile(g_pSettingManager->settingsPath))
+            {
+                Debugger::Log("Settings updated successfully.");
+            }
+            else
+            {
+                Debugger::Log("Failed to update settings.", Debugger::Type::Error);
+            }
+        },
+        [&]()
+        {
+            g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
+        },
+        [&]()
+        {
+            CursorChanger::RestoreCursor();
+        },
+        [&]()
+        {
+            if (g_pSettingManager->pCursorSetting->isFocusOnly)
+            {
+                SetEnableProcessMonitoring(hwnd, false);
+            }
+            else
+            {
+                SetEnableProcessMonitoring(hwnd, true);
+            }
+        }
+    );
+
+    SetEnableProcessMonitoring(hwnd, !g_pSettingManager->pCursorSetting->isFocusOnly);
 
     // Main loop
     bool done = false;
@@ -251,50 +293,13 @@ int main(int, char**)
         float windowWidth = static_cast<float>(GetSystemMetrics( SM_CXSCREEN ));
         float windowHeight = static_cast<float>(GetSystemMetrics( SM_CYSCREEN ));
         ImVec2 windowSize = ImVec2( windowWidth, windowHeight );
-
+        
         ImGui::SetNextWindowPos( ImVec2( 0, 0 ), ImGuiCond_Always );
         ImGui::SetNextWindowSize( windowSize, ImGuiCond_Always );
-        if (ImGui::Begin("Cursor Tool", &shouldOpen))
+        if (ImGui::Begin("Cursor Tool", &shouldOpen, ImGuiWindowFlags_NoCollapse))
         {
-            if (ImGui::Button( "Select Mouse Icon" ))
-            {
-                cursorFilePath = OpenFileSelectDialog();
-            }
-            ImGui::Text( "Selected file: %s", cursorFilePath.c_str());
-            if (ImGui::Button("Change Cursor"))
-            {
-                // Change system cursor
-                HCURSOR hCursor = (HCURSOR)LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
-                if (hCursor)
-                {
-                    if (!SetSystemCursor(hCursor,OCR_NORMAL))
-                    {
-                        DestroyCursor(hCursor);
-                        OutputDebugStringW(L"Failed to set system cursor\n");
-                    }
-                    else
-                    {
-                        if (g_changedCursor != nullptr)
-                        {
-                            DestroyCursor(g_changedCursor);
-                        }
-
-                        g_changedCursor = hCursor;
-                    }
-                }
-                else
-                {
-                    OutputDebugStringW(L"Fail to load cursor file\n");
-                    logText = "Failed to load cursor file: " + cursorFilePath;
-                }
-            }
-
-            if (ImGui::Button("Restore Mouse Icon"))
-            {
-                RestoreCursor();
-            }
-
-            ImGui::Text(logText.c_str());
+            cursorSettingUI.UpdateImGui();
+            debugger.UpdateImGui();
         }
         ImGui::End();
 
@@ -342,6 +347,13 @@ int main(int, char**)
     WaitForLastSubmittedFrame();
 
     // Cleanup
+    if (g_hWinEventHook)
+    {
+        UnhookWinEvent(g_hWinEventHook);
+        g_hWinEventHook = nullptr;
+    }
+    CursorChanger::RestoreCursor();
+    
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -350,7 +362,6 @@ int main(int, char**)
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
-    RestoreCursor();
 
     return 0;
 }
@@ -567,11 +578,33 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    if (g_pTrayManager && g_pTrayManager->ProcessMessage(msg, wParam, lParam))
+        return 0;
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
         return true;
 
     switch (msg)
     {
+    case WM_TIMER:
+        if (wParam == 1)
+        {
+            MonitorProcessAndChangeCursor();
+        }
+        return 0;
+    case WM_CREATE:
+        {
+            HCURSOR hCursor = LoadCursor(nullptr, IDC_ARROW);
+            HICON hIcon = CopyIcon(hCursor);
+            g_pTrayManager = std::make_unique<SystemTrayManager>(hWnd, hIcon, "Cursor Changer");
+            g_pTrayManager->SetOnDoubleClickCallback([hWnd]()
+            {
+                ShowWindow(hWnd, SW_RESTORE);
+                g_pTrayManager->RemoveFromTray();
+            });
+            SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+            SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+            return 0;
+        }
     case WM_SIZE:
         if (g_pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
         {
@@ -581,98 +614,153 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             assert(SUCCEEDED(result) && "Failed to resize swapchain.");
             CreateRenderTarget();
         }
+
+        if (wParam == SIZE_MINIMIZED)
+        {
+            ShowWindow(hWnd, SW_HIDE);
+            g_pTrayManager->AddToTray();
+        }
         return 0;
+    case WM_COMMAND:
+        {
+            switch (LOWORD(wParam))
+            {
+            case 1:
+                ShowWindow(hWnd, SW_RESTORE);
+                g_pTrayManager->RemoveFromTray();
+                break;
+            case 2:
+                DestroyWindow(hWnd);
+                break;
+            default: ;
+            }
+            return 0;
+        }
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
             return 0;
         break;
     case WM_DESTROY:
+        KillTimer(hWnd, 1);
+        
+        if (g_pTrayManager)
+        {
+            g_pTrayManager->RemoveFromTray();
+            g_pTrayManager.reset();
+        }
+        
         ::PostQuitMessage(0);
         return 0;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
 
-
-std::string OpenFileSelectDialog(const std::wstring& filter)
+void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
 {
-    OPENFILENAME ofn;       // common dialog box structure
-    WCHAR szFile[260];      // buffer for file name
-    // Initialize OPENFILENAME
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;
-    ofn.lpstrFile = szFile;
-    ofn.lpstrFile[0] = '\0';
-    ofn.nMaxFile = sizeof(szFile);
-    if (filter.empty())
+    if (g_pSettingManager == nullptr || g_pCursorChanger == nullptr)
     {
-        ofn.lpstrFilter = L"All Files (*.*)\0*.*\0";
+        return;
+    }
+
+    if (g_pSettingManager->pCursorSetting->shouldChangeByProcess == false)
+    {
+        return;
+    }
+
+    if (g_pSettingManager->pCursorSetting->isFocusOnly == false)
+    {
+        return;
+    }
+    
+    if (event == EVENT_SYSTEM_FOREGROUND)
+    {
+        DWORD processId;
+        GetWindowThreadProcessId(hwnd, &processId);
+
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        if (hProcess)
+        {
+            char processName[MAX_PATH] = "";
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameA(hProcess, 0, processName, &size))
+            {
+                std::string processNameStr(processName);
+                std::string targetProcessName = g_pSettingManager->pCursorSetting->targetProcess;
+
+                if (processNameStr.find(targetProcessName) != std::string::npos)
+                {
+                    g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
+                }
+                else
+                {
+                    CursorChanger::RestoreCursor();
+                }
+            }
+
+            CloseHandle(hProcess);
+        }
+    }
+}
+
+static void SetEnableProcessMonitoring(HWND hwnd, bool enable)
+{
+    if (enable)
+    {
+        SetTimer(hwnd, 1, MONITORING_TIME * 1000, nullptr);
+        Debugger::Log("Process monitoring enabled.");
     }
     else
     {
-        ofn.lpstrFilter = filter.c_str();
+        if (KillTimer(hwnd, 1) == 0)
+        {
+            Debugger::Log("Failed to kill timer.");
+        }
+        else
+        {
+            Debugger::Log("Timer killed successfully.");
+        }
+        
     }
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = nullptr;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = nullptr;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-    // Display the Open dialog box
-    if (GetOpenFileName(&ofn))
-    {
-        // UTF-16에서 UTF-8로 변환하기 위해 필요한 버퍼 크기 계산
-        int size_needed = WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, NULL, 0, NULL, NULL);
-
-        // 버퍼 생성
-        std::string utf8_str(size_needed, 0);
-
-        // 실제 변환 수행
-        WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, &utf8_str[0], size_needed, NULL, NULL);
-
-        // null 종료 문자 제거
-        utf8_str.resize(size_needed - 1);
-
-        return utf8_str;
-    }
-
-    return "";
 }
 
-bool RestoreCursor()
+void MonitorProcessAndChangeCursor()
 {
-    if (g_defaultCursor == nullptr)
+    if (g_pProcessManager == nullptr || g_pSettingManager == nullptr)
     {
-        return false;
+        return;
     }
 
-    SetSystemCursor(g_defaultCursor, OCR_NORMAL);
-    SystemParametersInfoW(SPI_SETCURSORS, 0, 0, 0);
-
-    if (g_changedCursor != nullptr)
+    if (g_pSettingManager->pCursorSetting->shouldChangeByProcess == false)
     {
-        DestroyCursor(g_changedCursor);
-        g_changedCursor = nullptr;
+        return;
     }
 
-    return true;
-}
+    static auto lastCheckTime = std::chrono::steady_clock::now();
+    auto currentTime = std::chrono::steady_clock::now();
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastCheckTime);
+    if (elapsedTime < std::chrono::seconds(MONITORING_TIME))
+    {
+        return;
+    }
 
-/// On Windows, this function is called when the console window is closed or when Ctrl+C is pressed.
-/// @param ctrlType
-/// @return
-BOOL ConsoleCtrlHandler(DWORD ctrlType)
-{
-    RestoreCursor();
-    return FALSE;
-}
+    lastCheckTime = currentTime;
+    
+    const std::string& targetProcessName = g_pSettingManager->pCursorSetting->targetProcess;
+    if (targetProcessName.empty())
+    {
+        return;
+    }
+    
+    g_pProcessManager->UpdateProcesses();
+    if (g_pProcessManager->IsProcessRunning(targetProcessName) == false)
+    {
+        return;
+    }
 
-/// On Windows, this function is called when an unhandled exception occurs.
-/// @param ExceptionInfo
-/// @return
-LONG CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* ExceptionInfo)
-{
-    RestoreCursor();
-    return EXCEPTION_CONTINUE_SEARCH;
+    if (CursorChanger::IsCursorChanged())
+    {
+        return;
+    }
+
+    g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
 }
