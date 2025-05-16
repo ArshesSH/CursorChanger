@@ -14,7 +14,9 @@
 #include <string>
 #include <tchar.h>
 
+#include "CursorChanger.h"
 #include "CursorSettingUI.h"
+#include "Debugger.h"
 #include "SettingManager.h"
 
 #ifdef _DEBUG
@@ -30,14 +32,6 @@
 static const int APP_NUM_FRAMES_IN_FLIGHT = 2;
 static const int APP_NUM_BACK_BUFFERS = 2;
 static const int APP_SRV_HEAP_SIZE = 64;
-
-
-static constexpr DWORD OCR_NORMAL =        32512;
-static constexpr DWORD OCR_IBEAM  =         32513;
-static constexpr DWORD OCR_WAIT   =         32514;
-static constexpr DWORD OCR_CROSS =          32515;
-static constexpr DWORD OCR_UP     =         32516;
-static constexpr DWORD OCR_HAND  =          32649;
 
 struct FrameContext
 {
@@ -110,8 +104,12 @@ static ID3D12Resource*              g_mainRenderTargetResource[APP_NUM_BACK_BUFF
 static D3D12_CPU_DESCRIPTOR_HANDLE  g_mainRenderTargetDescriptor[APP_NUM_BACK_BUFFERS] = {};
 
 // My static variables
-static HCURSOR g_defaultCursor = nullptr;
-static HCURSOR g_changedCursor = nullptr;
+// static HCURSOR g_defaultCursor = nullptr;
+// static HCURSOR g_changedCursor = nullptr;
+static const std::wstring g_version = L"v1.0.0";
+static const std::wstring g_appName = L"CursorChanger";
+static const std::wstring g_appVersion = g_appName + L" " + g_version;
+static std::unique_ptr<CursorChanger> g_pCursorChanger;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -122,17 +120,12 @@ void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// My functions
-static bool RestoreCursor();
-BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType);
-LONG WINAPI CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo);
-
 // Main code
 int main(int, char**)
 {
     // Add handlers
-    SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
-    SetUnhandledExceptionFilter(CursorUnhandledExceptionFilter);
+    SetConsoleCtrlHandler(CursorChanger::ConsoleCtrlHandler, TRUE);
+    SetUnhandledExceptionFilter(CursorChanger::CursorUnhandledExceptionFilter);
 
     // Create application window
     //ImGui_ImplWin32_EnableDpiAwareness();
@@ -142,7 +135,7 @@ int main(int, char**)
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
     HWND hwnd = ::CreateWindowW(wc.lpszClassName,
-        L"Cursor Changer", WS_OVERLAPPEDWINDOW,
+        g_appVersion.c_str(), WS_OVERLAPPEDWINDOW,
         100, 100, screenWidth / 2, screenHeight / 2, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
@@ -203,9 +196,7 @@ int main(int, char**)
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
     //IM_ASSERT(font != nullptr);
 
-
     static ImFont* g_gulimFont = nullptr;
-
     g_gulimFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\gulim.ttc", 16.0f, nullptr, io.Fonts->GetGlyphRangesKorean());
     if (g_gulimFont == nullptr) {
         OutputDebugStringW(L"Failed to load Gulim font\n");
@@ -219,52 +210,28 @@ int main(int, char**)
 
     // My variables
     SettingManager settingManager;
-    const auto curCursor = LoadCursor(nullptr, IDC_ARROW);
-    g_defaultCursor = CopyCursor(curCursor);
-    g_changedCursor = nullptr;
-    std::string logText;
+    g_pCursorChanger = std::make_unique<CursorChanger>();
+    Debugger debugger;
+    
     CursorSettingUI cursorSettingUI(settingManager.pCursorSetting,
         [&]()
         {
             if (settingManager.UpdateSettingsFile(settingManager.settingsPath))
             {
-                logText = "Settings updated successfully.";
+                Debugger::Log("Settings updated successfully.");
             }
             else
             {
-                logText = "Failed to update settings.";
+                Debugger::Log("Failed to update settings.", Debugger::Type::Error);
             }
         },
         [&]()
         {
-            const std::string& cursorFilePath = settingManager.pCursorSetting->cursorPath;
-            HCURSOR hCursor = LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
-            if (hCursor)
-            {
-                if (!SetSystemCursor(hCursor, OCR_NORMAL))
-                {
-                    DestroyCursor(hCursor);
-                    OutputDebugStringW(L"Failed to set system cursor\n");
-                }
-                else
-                {
-                    if (g_changedCursor != nullptr)
-                    {
-                        DestroyCursor(g_changedCursor);
-                    }
-
-                    g_changedCursor = hCursor;
-                }
-            }
-            else
-            {
-                OutputDebugStringW(L"Fail to load cursor file\n");
-                logText = "Failed to load cursor file: " + cursorFilePath;
-            }
+            g_pCursorChanger->ChangeCursor(settingManager.pCursorSetting->cursorPath);
         },
         [&]()
         {
-            RestoreCursor();
+            g_pCursorChanger->RestoreCursor();
         }
     );
 
@@ -304,12 +271,10 @@ int main(int, char**)
         
         ImGui::SetNextWindowPos( ImVec2( 0, 0 ), ImGuiCond_Always );
         ImGui::SetNextWindowSize( windowSize, ImGuiCond_Always );
-        if (ImGui::Begin("Cursor Tool", &shouldOpen))
+        if (ImGui::Begin("Cursor Tool", &shouldOpen, ImGuiWindowFlags_NoCollapse))
         {
             cursorSettingUI.UpdateImGui();
-
-            // Debugger
-            ImGui::Text("Log: %s", logText.c_str());
+            debugger.UpdateImGui();
         }
         ImGui::End();
 
@@ -357,6 +322,8 @@ int main(int, char**)
     WaitForLastSubmittedFrame();
 
     // Cleanup
+    CursorChanger::RestoreCursor();
+    
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -365,7 +332,6 @@ int main(int, char**)
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
-    RestoreCursor();
 
     return 0;
 }
@@ -606,43 +572,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
-}
-
-
-
-bool RestoreCursor()
-{
-    if (g_defaultCursor == nullptr)
-    {
-        return false;
-    }
-
-    SetSystemCursor(g_defaultCursor, OCR_NORMAL);
-    SystemParametersInfoW(SPI_SETCURSORS, 0, 0, 0);
-
-    if (g_changedCursor != nullptr)
-    {
-        DestroyCursor(g_changedCursor);
-        g_changedCursor = nullptr;
-    }
-
-    return true;
-}
-
-/// On Windows, this function is called when the console window is closed or when Ctrl+C is pressed.
-/// @param ctrlType
-/// @return
-BOOL ConsoleCtrlHandler(DWORD ctrlType)
-{
-    RestoreCursor();
-    return FALSE;
-}
-
-/// On Windows, this function is called when an unhandled exception occurs.
-/// @param ExceptionInfo
-/// @return
-LONG CursorUnhandledExceptionFilter(EXCEPTION_POINTERS* ExceptionInfo)
-{
-    RestoreCursor();
-    return EXCEPTION_CONTINUE_SEARCH;
 }

@@ -135,8 +135,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CursorChanger.cpp" />
     <ClCompile Include="CursorSetting.cpp" />
     <ClCompile Include="CursorSettingUI.cpp" />
+    <ClCompile Include="Debugger.cpp" />
     <ClCompile Include="FileSelector.cpp" />
     <ClCompile Include="ImGuiBaseUI.cpp" />
     <ClCompile Include="libs\imgui\backends\imgui_impl_dx12.cpp" />
@@ -152,8 +154,10 @@
     <ClCompile Include="SettingManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CursorChanger.h" />
     <ClInclude Include="CursorSetting.h" />
     <ClInclude Include="CursorSettingUI.h" />
+    <ClInclude Include="Debugger.h" />
     <ClInclude Include="FileSelector.h" />
     <ClInclude Include="ImGuiBaseUI.h" />
     <ClInclude Include="libs\imgui\backends\imgui_impl_dx12.h" />
