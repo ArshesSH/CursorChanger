@@ -73,6 +73,9 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(ProjectDir)libs\imgui\backends\;$(ProjectDir)libs\imgui\;$(IncludePath)</IncludePath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(ProjectDir)libs\imgui\backends\;$(ProjectDir)libs\imgui\;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -132,6 +135,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -150,7 +154,6 @@
     <ClCompile Include="libs\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ProcessManager.cpp" />
-    <ClCompile Include="SelectorUI.cpp" />
     <ClCompile Include="SettingManager.cpp" />
     <ClCompile Include="SystemTrayManager.cpp" />
   </ItemGroup>
@@ -170,7 +173,6 @@
     <ClInclude Include="libs\imgui\imstb_textedit.h" />
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
     <ClInclude Include="ProcessManager.h" />
-    <ClInclude Include="SelectorUI.h" />
     <ClInclude Include="SettingManager.h" />
     <ClInclude Include="SystemTrayManager.h" />
   </ItemGroup>
