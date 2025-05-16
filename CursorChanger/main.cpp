@@ -130,8 +130,13 @@ void MonitorProcessAndChangeCursor();
 void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 
 // Main code
+#ifdef _DEBUG
 int main(int, char**)
 {
+#else
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+#endif
     // Add handlers
     SetConsoleCtrlHandler(CursorChanger::ConsoleCtrlHandler, TRUE);
     SetUnhandledExceptionFilter(CursorChanger::CursorUnhandledExceptionFilter);
