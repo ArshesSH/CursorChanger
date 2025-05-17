@@ -10,13 +10,11 @@ class CursorSettingUI : public ImGuiBaseUI
 {
 public:
     CursorSettingUI(const std::shared_ptr<CursorSetting>& pCursorSetting, 
-                    const std::function<void()>& onClickSaveSetting = nullptr,
                     const std::function<void()>& onClickChangeCursor = nullptr,
                     const std::function<void()>& onClickRestoreCursor = nullptr,
                     const std::function<void()>& onClickFocusOnly = nullptr)
     :
         pCursorSetting(pCursorSetting),
-        onClickSaveSetting(onClickSaveSetting),
         onClickChangeCursor(onClickChangeCursor),
         onClickRestoreCursor(onClickRestoreCursor),
         onClickFocusOnly(onClickFocusOnly)
@@ -39,7 +37,6 @@ private:
     char processNameBuffer[256] = { 0 };
     ImVec2 spaceSize;
     // Interface
-    std::function<void()> onClickSaveSetting;
     std::function<void()> onClickChangeCursor;
     std::function<void()> onClickRestoreCursor;
     std::function<void()> onClickFocusOnly;

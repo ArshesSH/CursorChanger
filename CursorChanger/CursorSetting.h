@@ -5,7 +5,9 @@ struct CursorSetting
 {
 public:
     CursorSetting()
-        : shouldChangeByProcess(false){}
+        : shouldChangeByProcess(false), isFocusOnly(false)
+    {
+    }
     ~CursorSetting();
 
     static std::string Serialize(const CursorSetting& setting);

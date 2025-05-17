@@ -18,6 +18,8 @@
 #include "CursorSettingUI.h"
 #include "Debugger.h"
 #include "SettingManager.h"
+#include "SystemSetting.h"
+#include "SystemSettingUI.h"
 #include "SystemTrayManager.h"
 
 #ifdef _DEBUG
@@ -116,6 +118,7 @@ static std::unique_ptr<ProcessManager> g_pProcessManager;
 static std::unique_ptr<SettingManager> g_pSettingManager;
 static constexpr unsigned int MONITORING_TIME = 1;
 static HWINEVENTHOOK g_hWinEventHook = nullptr;
+static bool g_timerActive = false;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -128,6 +131,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 static void SetEnableProcessMonitoring(HWND hwnd, bool enable);
 void MonitorProcessAndChangeCursor();
 void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
+static bool RegisterAsStartupProgram(const std::wstring& appName, const std::wstring& appPath, bool enable);
+static bool ValidateStartupRegistration(const std::wstring& appName);
 
 // Main code
 #ifdef _DEBUG
@@ -229,19 +234,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_pSettingManager = std::make_unique<SettingManager>();
     g_pProcessManager = std::make_unique<ProcessManager>();
     Debugger debugger;
+
+    // Get app path
+    wchar_t appPath[MAX_PATH];
+    GetModuleFileNameW(nullptr, appPath, MAX_PATH);
+    std::wstring appPathW = appPath;
     
+    SystemSettingUI systemSettingUI(g_pSettingManager->pSystemSetting);
     CursorSettingUI cursorSettingUI(g_pSettingManager->pCursorSetting,
-        [&]()
-        {
-            if (g_pSettingManager->UpdateSettingsFile(g_pSettingManager->settingsPath))
-            {
-                Debugger::Log("Settings updated successfully.");
-            }
-            else
-            {
-                Debugger::Log("Failed to update settings.", Debugger::Type::Error);
-            }
-        },
         [&]()
         {
             g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
@@ -263,6 +263,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
     );
 
+    
+    if (g_pSettingManager->pSystemSetting->shouldRegisterStartUp)
+    {
+        ValidateStartupRegistration(g_appName);
+    }
     SetEnableProcessMonitoring(hwnd, !g_pSettingManager->pCursorSetting->isFocusOnly);
 
     // Main loop
@@ -303,7 +308,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         ImGui::SetNextWindowSize( windowSize, ImGuiCond_Always );
         if (ImGui::Begin("Cursor Tool", &shouldOpen, ImGuiWindowFlags_NoCollapse))
         {
+            systemSettingUI.UpdateImGui();
             cursorSettingUI.UpdateImGui();
+            if (ImGui::Button("Save Settings"))
+            {
+                if (g_pSettingManager->UpdateSettingsFile(g_pSettingManager->settingsPath))
+                {
+                    Debugger::Log("Settings updated successfully.");
+                }
+                else
+                {
+                    Debugger::Log("Failed to update settings.", Debugger::Type::Error);
+                }
+
+                RegisterAsStartupProgram(g_appName, appPathW, g_pSettingManager->pSystemSetting->shouldRegisterStartUp);
+            }
             debugger.UpdateImGui();
         }
         ImGui::End();
@@ -622,8 +641,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         if (wParam == SIZE_MINIMIZED)
         {
-            ShowWindow(hWnd, SW_HIDE);
-            g_pTrayManager->AddToTray();
+            if (g_pSettingManager && g_pSettingManager->pSystemSetting && g_pSettingManager->pSystemSetting->isSystemTrayMode)
+            {
+                ShowWindow(hWnd, SW_HIDE);
+                g_pTrayManager->AddToTray();
+            }
         }
         return 0;
     case WM_COMMAND:
@@ -712,20 +734,31 @@ static void SetEnableProcessMonitoring(HWND hwnd, bool enable)
 {
     if (enable)
     {
-        SetTimer(hwnd, 1, MONITORING_TIME * 1000, nullptr);
-        Debugger::Log("Process monitoring enabled.");
-    }
-    else
-    {
-        if (KillTimer(hwnd, 1) == 0)
+        UINT_PTR timerId = SetTimer(hwnd, 1, MONITORING_TIME * 1000, nullptr);
+        if (timerId != 0)
         {
-            Debugger::Log("Failed to kill timer.");
+            g_timerActive = true;
+            Debugger::Log("Process monitoring enabled.");
         }
         else
         {
-            Debugger::Log("Timer killed successfully.");
+            Debugger::Log("Failed to set timer for process monitoring.", Debugger::Type::Error);
         }
-        
+    }
+    else
+    {
+        if (g_timerActive && IsWindow(hwnd))
+        {
+            if (KillTimer(hwnd, 1) == 0)
+            {
+                Debugger::Log("Failed to kill timer.");
+            }
+            else
+            {
+                g_timerActive = false;
+                Debugger::Log("Timer killed successfully.");
+            }
+        }
     }
 }
 
@@ -769,4 +802,79 @@ void MonitorProcessAndChangeCursor()
     }
 
     g_pCursorChanger->ChangeCursor(g_pSettingManager->pCursorSetting->cursorPath);
+}
+
+static bool RegisterAsStartupProgram(const std::wstring& appName, const std::wstring& appPath, bool enable)
+{
+    HKEY hKey;
+    const wchar_t* keyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    
+    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, keyPath, 0, KEY_SET_VALUE, &hKey);
+    if (result != ERROR_SUCCESS)
+    {
+        return false;
+    }
+    
+    if (enable)
+    {
+        result = RegSetValueExW(hKey, appName.c_str(), 0, REG_SZ, 
+                              reinterpret_cast<const BYTE*>(appPath.c_str()), 
+                              static_cast<DWORD>((appPath.length() + 1) * sizeof(wchar_t)));
+    }
+    else
+    {
+        result = RegDeleteValueW(hKey, appName.c_str());
+    }
+    
+    RegCloseKey(hKey);
+    if (result != ERROR_SUCCESS)
+    {
+        Debugger::Log("Failed to register startup program.", Debugger::Type::Error);
+    }
+    else
+    {
+        Debugger::Log("Startup program registration " + std::string(enable ? "enabled" : "disabled") + ".");
+    }
+    
+    return (result == ERROR_SUCCESS);
+}
+
+static bool ValidateStartupRegistration(const std::wstring& appName)
+{
+    HKEY hKey;
+    const wchar_t* keyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    
+    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, keyPath, 0, KEY_READ | KEY_SET_VALUE, &hKey);
+    if (result != ERROR_SUCCESS)
+        return false;
+    
+    wchar_t currentPath[MAX_PATH];
+    GetModuleFileNameW(nullptr, currentPath, MAX_PATH);
+    
+    wchar_t registeredPath[MAX_PATH] = {0};
+    DWORD dataSize = sizeof(registeredPath);
+    DWORD dataType;
+    result = RegQueryValueExW(hKey, appName.c_str(), nullptr, &dataType, 
+                            reinterpret_cast<BYTE*>(registeredPath), &dataSize);
+    
+    bool isValid = false;
+    
+    if (result == ERROR_SUCCESS && dataType == REG_SZ)
+    {
+        if (wcscmp(currentPath, registeredPath) != 0)
+        {
+            result = RegSetValueExW(hKey, appName.c_str(), 0, REG_SZ,
+                                  reinterpret_cast<const BYTE*>(currentPath),
+                                  static_cast<DWORD>((wcslen(currentPath) + 1) * sizeof(wchar_t)));
+            isValid = (result == ERROR_SUCCESS);
+            Debugger::Log("Updated startup registry path");
+        }
+        else
+        {
+            isValid = true;
+        }
+    }
+    
+    RegCloseKey(hKey);
+    return isValid;
 }
