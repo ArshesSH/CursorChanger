@@ -10,6 +10,7 @@
 CursorChanger is a Windows desktop utility that automatically changes the mouse cursor based on the active or running process. It is built with Dear ImGui and uses DirectX 12.
 
 ## Features
+<img src="CursorChanger/images/1.png" alt="CursorChanger" width="400"/>
 
 - Change the default system cursor to a specified cursor file (`.cur`, `.ani`)
 - Manual cursor change or automatic change based on a target process
@@ -62,6 +63,7 @@ CursorChanger는 활성 또는 실행 중인 프로세스에 따라 마우스 �
 Dear ImGui로 작성되었으며, DirectX12를 사용합니다.
 
 ## 주요 기능
+  <img src="CursorChanger/images/1.png" width="400" alt="CursorChanger1" />
 
 - 기본 마우스 커서를 지정한 커서 파일(.cur, .ani)로 변경
 - 수동 변경 또는 프로세스에 따른 자동 변경 가능

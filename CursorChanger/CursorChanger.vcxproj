@@ -181,6 +181,14 @@
     <ClInclude Include="SystemTrayManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\LICENSE">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="..\README.md">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <Content Include="images\1.png" />
+    <Content Include="images\2.png" />
     <Content Include="StringUtils.h" />
     <None Include="UnregisterStartup.bat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
