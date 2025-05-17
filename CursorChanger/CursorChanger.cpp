@@ -1,5 +1,7 @@
 #include "CursorChanger.h"
 
+#include "StringUtils.h"
+
 HCURSOR CursorChanger::defaultCursor = nullptr;
 HCURSOR CursorChanger::changedCursor = nullptr;
 
@@ -61,7 +63,8 @@ bool CursorChanger::IsCursorChanged()
 
 bool CursorChanger::ChangeCursor(const std::string& cursorFilePath)
 {
-    HCURSOR hCursor = LoadCursorFromFileW(std::wstring(cursorFilePath.begin(), cursorFilePath.end()).c_str());
+    std::wstring wCursorFilePath = StringUtils::Utf8ToWide(cursorFilePath);
+    HCURSOR hCursor = LoadCursorFromFileW(wCursorFilePath.c_str());
     if (hCursor)
     {
         if (!SetSystemCursor(hCursor, OCR_NORMAL))
