@@ -82,6 +82,7 @@ Dear ImGui로 작성되었으며, DirectX12를 사용합니다.
 - DirectX 12 지원 GPU
 
 ### 사용법
+[![](https://img.youtube.com/vi/8b_VG6UAdts/maxresdefault.jpg)](https://www.youtube.com/watch?v=8b_VG6UAdts)
 
 1. 빌드된 실행 파일을 실행합니다.
 2. 커서파일을 지정하고 수동으로 변경합니다.
