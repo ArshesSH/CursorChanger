@@ -3,7 +3,7 @@
 </p>
 
 # English
-[![Releases](https://img.shields.io/github/v/release/ArshesSH/CursorChanger?Releases)](https://github.com/ArshesSH/CursorChanger/releases)
+[![Releases](https://img.shields.io/github/v/release/ArshesSH/CursorChanger)](https://github.com/ArshesSH/CursorChanger/releases)
 
 # CursorChanger
 
@@ -49,7 +49,7 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 # 한국어
 
-[![Releases](https://img.shields.io/github/v/release/ArshesSH/CursorChanger?label=Releases)](https://github.com/ArshesSH/CursorChanger/releases)
+[![Releases](https://img.shields.io/github/v/release/ArshesSH/CursorChanger)](https://github.com/ArshesSH/CursorChanger/releases)
 
 # CursorChanger
 

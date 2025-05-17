@@ -155,6 +155,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ProcessManager.cpp" />
     <ClCompile Include="SettingManager.cpp" />
+    <ClCompile Include="SystemSetting.cpp" />
+    <ClCompile Include="SystemSettingUI.cpp" />
     <ClCompile Include="SystemTrayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -174,7 +176,15 @@
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
     <ClInclude Include="ProcessManager.h" />
     <ClInclude Include="SettingManager.h" />
+    <ClInclude Include="SystemSetting.h" />
+    <ClInclude Include="SystemSettingUI.h" />
     <ClInclude Include="SystemTrayManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="StringUtils.h" />
+    <None Include="UnregisterStartup.bat">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

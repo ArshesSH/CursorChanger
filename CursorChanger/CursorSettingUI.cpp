@@ -10,6 +10,7 @@ CursorSettingUI::~CursorSettingUI()
 
 void CursorSettingUI::UpdateImGui()
 {
+    ImGui::Dummy(spaceSize);
     ImGui::SeparatorText("Cursor Setting");
     if (ImGui::Button("Select cursor path"))
     {
@@ -36,7 +37,7 @@ void CursorSettingUI::UpdateImGui()
                 onClickFocusOnly();
             }
         }
-        ImGui::SetItemTooltip("Focus only", "Change cursor only when the target process is in focus");
+        ImGui::SetItemTooltip("Change cursor only when the target process is in focus");
         ImGui::Dummy(spaceSize);
 
         ImGui::Text("Process Name:");
@@ -51,15 +52,6 @@ void CursorSettingUI::UpdateImGui()
     }
     
     ImGui::Dummy(spaceSize);
-    ImGui::Separator();
-    if (ImGui::Button("Save") )
-    {
-        if (onClickSaveSetting != nullptr)
-        {
-            onClickSaveSetting();
-        }
-    }
-    ImGui::SameLine();
     if (ImGui::Button("Change Cursor Manually"))
     {
         if (onClickChangeCursor != nullptr)
