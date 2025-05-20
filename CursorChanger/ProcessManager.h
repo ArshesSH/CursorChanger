@@ -21,4 +21,18 @@ public:
 
 private:
     std::unordered_map<DWORD, std::wstring> processMap;
+
+    using GetForegroundWindowFunc = HWND(WINAPI*)();
+    using GetWindowThreadProcessIdFunc = DWORD(WINAPI*)(HWND, LPDWORD);
+    using OpenProcessFunc = HANDLE(WINAPI*)(DWORD, BOOL, DWORD);
+    using QueryFullProcessImageNameWFunc = BOOL(WINAPI*)(HANDLE, DWORD, LPWSTR, LPDWORD);
+    using CloseHandleFunc = BOOL(WINAPI*)(HANDLE);
+    using CreateToolhelp32SnapshotFunc = HANDLE(WINAPI*)(DWORD, DWORD);
+
+    static GetForegroundWindowFunc getForegroundWindowFunc;
+    static GetWindowThreadProcessIdFunc getWindowThreadProcessIdFunc;
+    static OpenProcessFunc openProcessFunc;
+    static QueryFullProcessImageNameWFunc queryFullProcessImageNameWFunc;
+    static CloseHandleFunc closeHandleFunc;
+    static CreateToolhelp32SnapshotFunc createToolhelp32SnapshotFunc;
 };

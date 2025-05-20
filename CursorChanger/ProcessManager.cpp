@@ -1,28 +1,53 @@
 #include "ProcessManager.h"
 
 #include <tlhelp32.h>
-#include <psapi.h>       // GetModuleFileNameEx, GetProcessMemoryInfo
-#include <winternl.h>    // NT API 함수
+#include <winternl.h>
+#include <cassert>
+
+#include "DynamicLibraryLoader.h"
 #pragma comment(lib, "psapi.lib")
+
+ProcessManager::GetForegroundWindowFunc ProcessManager::getForegroundWindowFunc = nullptr;
+ProcessManager::GetWindowThreadProcessIdFunc ProcessManager::getWindowThreadProcessIdFunc = nullptr;
+ProcessManager::OpenProcessFunc ProcessManager::openProcessFunc = nullptr;
+ProcessManager::QueryFullProcessImageNameWFunc ProcessManager::queryFullProcessImageNameWFunc = nullptr;
+ProcessManager::CloseHandleFunc ProcessManager::closeHandleFunc = nullptr;
+ProcessManager::CreateToolhelp32SnapshotFunc ProcessManager::createToolhelp32SnapshotFunc = nullptr;
 
 ProcessManager::ProcessManager()
 {
+    getForegroundWindowFunc = DynamicLibraryLoader::GetFunctionOrNull<GetForegroundWindowFunc>(L"user32.dll", "GetForegroundWindow");
+    assert(getForegroundWindowFunc != nullptr);
+    getWindowThreadProcessIdFunc = DynamicLibraryLoader::GetFunctionOrNull<GetWindowThreadProcessIdFunc>(L"user32.dll", "GetWindowThreadProcessId");
+    assert(getWindowThreadProcessIdFunc != nullptr);
+    openProcessFunc = DynamicLibraryLoader::GetFunctionOrNull<OpenProcessFunc>(L"kernel32.dll", "OpenProcess");
+    assert(openProcessFunc != nullptr);
+    queryFullProcessImageNameWFunc = DynamicLibraryLoader::GetFunctionOrNull<QueryFullProcessImageNameWFunc>(L"kernel32.dll", "QueryFullProcessImageNameW");
+    assert(queryFullProcessImageNameWFunc != nullptr);
+    closeHandleFunc = DynamicLibraryLoader::GetFunctionOrNull<CloseHandleFunc>(L"kernel32.dll", "CloseHandle");
+    assert(closeHandleFunc != nullptr);
+    createToolhelp32SnapshotFunc = DynamicLibraryLoader::GetFunctionOrNull<CreateToolhelp32SnapshotFunc>(L"kernel32.dll", "CreateToolhelp32Snapshot");
+    assert(createToolhelp32SnapshotFunc != nullptr);
 }
 
 ProcessManager::~ProcessManager()
 {
+    processMap.clear();
+    getForegroundWindowFunc = nullptr;
+    getWindowThreadProcessIdFunc = nullptr;
+    openProcessFunc = nullptr;
 }
 
 DWORD ProcessManager::GetForegroundProcessIdOrZero()
 {
-    HWND hwnd = GetForegroundWindow();
+    HWND hwnd = getForegroundWindowFunc();
     if (hwnd == nullptr)
     {
         return 0;
     }
 
     DWORD processId = 0;
-    GetWindowThreadProcessId(hwnd, &processId);
+    getWindowThreadProcessIdFunc(hwnd, &processId);
     return processId;
 }
 
@@ -34,7 +59,7 @@ std::string ProcessManager::GetForegroundProcessNameOrEmpty()
         return "";
     }
 
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    HANDLE hProcess = openProcessFunc(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
     if (hProcess == nullptr)
     {
         return "";
@@ -43,13 +68,13 @@ std::string ProcessManager::GetForegroundProcessNameOrEmpty()
     wchar_t processPath[MAX_PATH];
     DWORD bufferSize = MAX_PATH;
 
-    if (QueryFullProcessImageNameW(hProcess, 0, processPath, &bufferSize) == false)
+    if (queryFullProcessImageNameWFunc(hProcess, 0, processPath, &bufferSize) == false)
     {
-        CloseHandle(hProcess);
+        closeHandleFunc(hProcess);
         return "";
     }
 
-    CloseHandle(hProcess);
+    closeHandleFunc(hProcess);
 
     std::wstring wProcessName(processPath);
     size_t lastSlash = wProcessName.find_last_of(L"\\");
@@ -65,7 +90,7 @@ void ProcessManager::UpdateProcesses()
 {
     processMap.clear();
     
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    HANDLE hSnapshot = createToolhelp32SnapshotFunc(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE)
         return;
 
@@ -80,14 +105,13 @@ void ProcessManager::UpdateProcesses()
         } while (Process32Next(hSnapshot, &pe32));
     }
 
-    CloseHandle(hSnapshot);
+    closeHandleFunc(hSnapshot);
 }
 
 bool ProcessManager::IsProcessRunning(const std::wstring& processName) const
 {
     for (const auto& process : processMap)
     {
-        // compare process name
         if (process.second == processName)
         {
             return true;

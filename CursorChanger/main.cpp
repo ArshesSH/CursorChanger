@@ -17,6 +17,7 @@
 #include "CursorChanger.h"
 #include "CursorSettingUI.h"
 #include "Debugger.h"
+#include "DynamicLibraryLoader.h"
 #include "SettingManager.h"
 #include "SystemSetting.h"
 #include "SystemSettingUI.h"
@@ -109,7 +110,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE  g_mainRenderTargetDescriptor[APP_NUM_BACK_BU
 // My static variables
 // static HCURSOR g_defaultCursor = nullptr;
 // static HCURSOR g_changedCursor = nullptr;
-static const std::wstring g_version = L"v1.1.0";
+static const std::wstring g_version = L"v1.1.1";
 static const std::wstring g_appName = L"CursorChanger";
 static const std::wstring g_appVersion = g_appName + L" " + g_version;
 static std::unique_ptr<CursorChanger> g_pCursorChanger;
@@ -119,6 +120,31 @@ static std::unique_ptr<SettingManager> g_pSettingManager;
 static constexpr unsigned int MONITORING_TIME = 1;
 static HWINEVENTHOOK g_hWinEventHook = nullptr;
 static bool g_timerActive = false;
+
+using RegOpenKeyExW_t = LSTATUS(WINAPI*)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
+using RegQueryValueExW_t = LSTATUS(WINAPI*)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+using RegSetValueExW_t = LSTATUS(WINAPI*)(HKEY, LPCWSTR, DWORD, DWORD, const BYTE*, DWORD);
+using RegDeleteValueW_t = LSTATUS(WINAPI*)(HKEY, LPCWSTR);
+using RegCloseKey_t = LSTATUS(WINAPI*)(HKEY);
+using GetModuleFileNameW_t = DWORD(WINAPI*)(HMODULE, LPWSTR, DWORD);
+using GetModuleFileName_t = DWORD(WINAPI*)(HMODULE, LPSTR, DWORD);
+using GetWindowThreadProcessId_t = DWORD(WINAPI*)(HWND, LPDWORD);
+using OpenProcess_t = HANDLE(WINAPI*)(DWORD, BOOL, DWORD);
+using QueryFullProcessImageNameA_t = BOOL(WINAPI*)(HANDLE, DWORD, LPSTR, LPDWORD);
+using CloseHandle_t = BOOL(WINAPI*)(HANDLE);
+
+static RegOpenKeyExW_t RegOpenKeyExWFunc = nullptr;
+static RegQueryValueExW_t RegQueryValueExWFunc = nullptr;
+static RegSetValueExW_t RegSetValueExWFunc = nullptr;
+static RegCloseKey_t RegCloseKeyWFunc = nullptr;
+static RegDeleteValueW_t RegDeleteValueExWFunc = nullptr;
+static GetModuleFileNameW_t GetModuleFileNameWFunc = nullptr;
+static GetModuleFileName_t GetModuleFileNameFunc = nullptr;
+static GetWindowThreadProcessId_t GetWindowThreadProcessIdFunc = nullptr;
+static OpenProcess_t OpenProcessFunc = nullptr;
+static QueryFullProcessImageNameA_t QueryFullProcessImageNameAFunc = nullptr;
+static CloseHandle_t CloseHandleFunc = nullptr;
+
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -133,6 +159,7 @@ void MonitorProcessAndChangeCursor();
 void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 static bool RegisterAsStartupProgram(const std::wstring& appName, const std::wstring& appPath, bool enable);
 static bool ValidateStartupRegistration(const std::wstring& appName);
+void InitializeDynamicFunctions();
 
 // Main code
 #ifdef _DEBUG
@@ -143,6 +170,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 {
 #endif
     // Add handlers
+    InitializeDynamicFunctions();
     SetConsoleCtrlHandler(CursorChanger::ConsoleCtrlHandler, TRUE);
     SetUnhandledExceptionFilter(CursorChanger::CursorUnhandledExceptionFilter);
 
@@ -237,7 +265,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Get app path
     wchar_t appPath[MAX_PATH];
-    GetModuleFileNameW(nullptr, appPath, MAX_PATH);
+    GetModuleFileNameWFunc(nullptr, appPath, MAX_PATH);
     std::wstring appPathW = appPath;
     
     SystemSettingUI systemSettingUI(g_pSettingManager->pSystemSetting);
@@ -703,14 +731,14 @@ void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWN
     if (event == EVENT_SYSTEM_FOREGROUND)
     {
         DWORD processId;
-        GetWindowThreadProcessId(hwnd, &processId);
+        GetWindowThreadProcessIdFunc(hwnd, &processId);
 
-        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        HANDLE hProcess = OpenProcessFunc(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
         if (hProcess)
         {
             char processName[MAX_PATH] = "";
             DWORD size = MAX_PATH;
-            if (QueryFullProcessImageNameA(hProcess, 0, processName, &size))
+            if (QueryFullProcessImageNameAFunc(hProcess, 0, processName, &size))
             {
                 std::string processNameStr(processName);
                 std::string targetProcessName = g_pSettingManager->pCursorSetting->targetProcess;
@@ -725,7 +753,7 @@ void CALLBACK CursorFocusEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWN
                 }
             }
 
-            CloseHandle(hProcess);
+            CloseHandleFunc(hProcess);
         }
     }
 }
@@ -809,7 +837,7 @@ static bool RegisterAsStartupProgram(const std::wstring& appName, const std::wst
     HKEY hKey;
     const wchar_t* keyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     
-    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, keyPath, 0, KEY_SET_VALUE, &hKey);
+    LONG result = RegOpenKeyExWFunc(HKEY_CURRENT_USER, keyPath, 0, KEY_SET_VALUE, &hKey);
     if (result != ERROR_SUCCESS)
     {
         return false;
@@ -817,16 +845,16 @@ static bool RegisterAsStartupProgram(const std::wstring& appName, const std::wst
     
     if (enable)
     {
-        result = RegSetValueExW(hKey, appName.c_str(), 0, REG_SZ, 
+        result = RegSetValueExWFunc(hKey, appName.c_str(), 0, REG_SZ, 
                               reinterpret_cast<const BYTE*>(appPath.c_str()), 
                               static_cast<DWORD>((appPath.length() + 1) * sizeof(wchar_t)));
     }
     else
     {
-        result = RegDeleteValueW(hKey, appName.c_str());
+        result = RegDeleteValueExWFunc(hKey, appName.c_str());
     }
     
-    RegCloseKey(hKey);
+    RegCloseKeyWFunc(hKey);
     if (result != ERROR_SUCCESS)
     {
         Debugger::Log("Failed to register startup program.", Debugger::Type::Error);
@@ -844,17 +872,17 @@ static bool ValidateStartupRegistration(const std::wstring& appName)
     HKEY hKey;
     const wchar_t* keyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     
-    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, keyPath, 0, KEY_READ | KEY_SET_VALUE, &hKey);
+    LONG result = RegOpenKeyExWFunc(HKEY_CURRENT_USER, keyPath, 0, KEY_READ | KEY_SET_VALUE, &hKey);
     if (result != ERROR_SUCCESS)
         return false;
     
     wchar_t currentPath[MAX_PATH];
-    GetModuleFileNameW(nullptr, currentPath, MAX_PATH);
+    GetModuleFileNameWFunc(nullptr, currentPath, MAX_PATH);
     
     wchar_t registeredPath[MAX_PATH] = {0};
     DWORD dataSize = sizeof(registeredPath);
     DWORD dataType;
-    result = RegQueryValueExW(hKey, appName.c_str(), nullptr, &dataType, 
+    result = RegQueryValueExWFunc(hKey, appName.c_str(), nullptr, &dataType, 
                             reinterpret_cast<BYTE*>(registeredPath), &dataSize);
     
     bool isValid = false;
@@ -863,7 +891,7 @@ static bool ValidateStartupRegistration(const std::wstring& appName)
     {
         if (wcscmp(currentPath, registeredPath) != 0)
         {
-            result = RegSetValueExW(hKey, appName.c_str(), 0, REG_SZ,
+            result = RegSetValueExWFunc(hKey, appName.c_str(), 0, REG_SZ,
                                   reinterpret_cast<const BYTE*>(currentPath),
                                   static_cast<DWORD>((wcslen(currentPath) + 1) * sizeof(wchar_t)));
             isValid = (result == ERROR_SUCCESS);
@@ -875,6 +903,25 @@ static bool ValidateStartupRegistration(const std::wstring& appName)
         }
     }
     
-    RegCloseKey(hKey);
+    RegCloseKeyWFunc(hKey);
     return isValid;
+}
+
+void InitializeDynamicFunctions()
+{
+    DynamicLibraryLoader::LoadLibraryFrom(L"user32.dll");
+    DynamicLibraryLoader::LoadLibraryFrom(L"kernel32.dll");
+    DynamicLibraryLoader::LoadLibraryFrom(L"advapi32.dll");
+
+    RegOpenKeyExWFunc = DynamicLibraryLoader::GetFunctionOrNull<RegOpenKeyExW_t>(L"advapi32.dll", "RegOpenKeyExW");
+    RegQueryValueExWFunc = DynamicLibraryLoader::GetFunctionOrNull<RegQueryValueExW_t>(L"advapi32.dll", "RegQueryValueExW");
+    RegSetValueExWFunc = DynamicLibraryLoader::GetFunctionOrNull<RegSetValueExW_t>(L"advapi32.dll", "RegSetValueExW");
+    RegDeleteValueExWFunc = DynamicLibraryLoader::GetFunctionOrNull<RegDeleteValueW_t>(L"advapi32.dll", "RegDeleteValueW");
+    RegCloseKeyWFunc = DynamicLibraryLoader::GetFunctionOrNull<RegCloseKey_t>(L"advapi32.dll", "RegCloseKey");
+    GetModuleFileNameWFunc = DynamicLibraryLoader::GetFunctionOrNull<GetModuleFileNameW_t>(L"kernel32.dll", "GetModuleFileNameW");
+    GetModuleFileNameFunc = DynamicLibraryLoader::GetFunctionOrNull<GetModuleFileName_t>(L"kernel32.dll", "GetModuleFileNameA");
+    GetWindowThreadProcessIdFunc = DynamicLibraryLoader::GetFunctionOrNull<GetWindowThreadProcessId_t>(L"user32.dll", "GetWindowThreadProcessId");
+    OpenProcessFunc = DynamicLibraryLoader::GetFunctionOrNull<OpenProcess_t>(L"kernel32.dll", "OpenProcess");
+    QueryFullProcessImageNameAFunc = DynamicLibraryLoader::GetFunctionOrNull<QueryFullProcessImageNameA_t>(L"kernel32.dll", "QueryFullProcessImageNameA");
+    CloseHandleFunc = DynamicLibraryLoader::GetFunctionOrNull<CloseHandle_t>(L"kernel32.dll", "CloseHandle");
 }
