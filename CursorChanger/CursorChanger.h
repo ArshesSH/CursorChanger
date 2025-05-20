@@ -26,6 +26,15 @@ public:
     bool ChangeCursor(const std::string& cursorFilePath);
     
 private:
+    using SetSystemCursorFunc = BOOL(WINAPI*)(HCURSOR hCursor, DWORD id);
+    using DestroyCursorFunc = BOOL(WINAPI*)(HCURSOR hCursor);
+    using SystemParametersInfoWFunc = BOOL(WINAPI*)(UINT uiAction, UINT uiParam, PVOID pvParam, UINT fWinIni);
+    using LoadCursorFromFileWFunc = HCURSOR(WINAPI*)(LPCWSTR lpFileName);
+    
     static HCURSOR defaultCursor;
     static HCURSOR changedCursor;
+    static SetSystemCursorFunc setSystemCursorFunc;
+    static DestroyCursorFunc destroyCursorFunc;
+    static SystemParametersInfoWFunc systemParametersInfoWFunc;
+    static LoadCursorFromFileWFunc loadCursorFromFileWFunc;
 };

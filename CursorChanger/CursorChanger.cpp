@@ -1,9 +1,17 @@
 #include "CursorChanger.h"
 
+#include <assert.h>
+
+#include "DynamicLibraryLoader.h"
 #include "StringUtils.h"
+
 
 HCURSOR CursorChanger::defaultCursor = nullptr;
 HCURSOR CursorChanger::changedCursor = nullptr;
+CursorChanger::SetSystemCursorFunc CursorChanger::setSystemCursorFunc = nullptr;
+CursorChanger::DestroyCursorFunc CursorChanger::destroyCursorFunc = nullptr;
+CursorChanger::SystemParametersInfoWFunc CursorChanger::systemParametersInfoWFunc = nullptr;
+CursorChanger::LoadCursorFromFileWFunc CursorChanger::loadCursorFromFileWFunc = nullptr;
 
 CursorChanger::CursorChanger()
 {
@@ -13,6 +21,15 @@ CursorChanger::CursorChanger()
         defaultCursor = CopyCursor(curCursor);
         changedCursor = nullptr;
     }
+
+    setSystemCursorFunc = DynamicLibraryLoader::GetFunctionOrNull<SetSystemCursorFunc>(L"user32.dll", "SetSystemCursor");
+    assert(setSystemCursorFunc != nullptr);
+    destroyCursorFunc = DynamicLibraryLoader::GetFunctionOrNull<DestroyCursorFunc>(L"user32.dll", "DestroyCursor");
+    assert(destroyCursorFunc != nullptr);
+    systemParametersInfoWFunc = DynamicLibraryLoader::GetFunctionOrNull<SystemParametersInfoWFunc>(L"user32.dll", "SystemParametersInfoW");
+    assert(systemParametersInfoWFunc != nullptr);
+    loadCursorFromFileWFunc = DynamicLibraryLoader::GetFunctionOrNull<LoadCursorFromFileWFunc>(L"user32.dll", "LoadCursorFromFileW");
+    assert(loadCursorFromFileWFunc != nullptr);
 }
 
 CursorChanger::~CursorChanger()
@@ -20,9 +37,16 @@ CursorChanger::~CursorChanger()
     RestoreCursor();
     if (defaultCursor != nullptr)
     {
-        DestroyCursor(defaultCursor);
+        destroyCursorFunc(defaultCursor);
         defaultCursor = nullptr;
     }
+
+    setSystemCursorFunc = nullptr;
+    destroyCursorFunc = nullptr;
+    systemParametersInfoWFunc = nullptr;
+    loadCursorFromFileWFunc = nullptr;
+    defaultCursor = nullptr;
+    changedCursor = nullptr;
 }
 
 BOOL CursorChanger::ConsoleCtrlHandler(DWORD ctrlType)
@@ -44,12 +68,12 @@ bool CursorChanger::RestoreCursor()
         return false;
     }
 
-    SetSystemCursor(defaultCursor, OCR_NORMAL);
-    SystemParametersInfoW(SPI_SETCURSORS, 0, 0, 0);
+    setSystemCursorFunc(defaultCursor, OCR_NORMAL);
+    systemParametersInfoWFunc(SPI_SETCURSORS, 0, 0, 0);
 
     if (changedCursor != nullptr)
     {
-        DestroyCursor(changedCursor);
+        destroyCursorFunc(changedCursor);
         changedCursor = nullptr;
     }
 
@@ -64,19 +88,19 @@ bool CursorChanger::IsCursorChanged()
 bool CursorChanger::ChangeCursor(const std::string& cursorFilePath)
 {
     std::wstring wCursorFilePath = StringUtils::Utf8ToWide(cursorFilePath);
-    HCURSOR hCursor = LoadCursorFromFileW(wCursorFilePath.c_str());
+    HCURSOR hCursor = loadCursorFromFileWFunc(wCursorFilePath.c_str());
     if (hCursor)
     {
-        if (!SetSystemCursor(hCursor, OCR_NORMAL))
+        if (!setSystemCursorFunc(hCursor, OCR_NORMAL))
         {
-            DestroyCursor(hCursor);
+            destroyCursorFunc(hCursor);
             Debugger::Log("Failed to set system cursor", Debugger::Type::Error);
             return false;
         }
         
         if (changedCursor != nullptr)
         {
-            DestroyCursor(changedCursor);
+            destroyCursorFunc(changedCursor);
         }
 
         changedCursor = hCursor;
