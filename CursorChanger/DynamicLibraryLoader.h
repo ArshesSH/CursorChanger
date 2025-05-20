@@ -18,7 +18,6 @@ public:
     template <typename T>
     static T GetFunctionOrNull(const std::wstring& libraryName, const std::string& functionName)
     {
-        // 라이브러리 이름과 함수 이름을 모두 포함하는 고유한 키 생성
         std::string key = std::string(libraryName.begin(), libraryName.end()) + "::" + functionName;
         auto it = loadedFunctions.find(key);
         if (it != loadedFunctions.end())

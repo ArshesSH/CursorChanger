@@ -110,7 +110,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE  g_mainRenderTargetDescriptor[APP_NUM_BACK_BU
 // My static variables
 // static HCURSOR g_defaultCursor = nullptr;
 // static HCURSOR g_changedCursor = nullptr;
-static const std::wstring g_version = L"v1.1.0";
+static const std::wstring g_version = L"v1.1.1";
 static const std::wstring g_appName = L"CursorChanger";
 static const std::wstring g_appVersion = g_appName + L" " + g_version;
 static std::unique_ptr<CursorChanger> g_pCursorChanger;

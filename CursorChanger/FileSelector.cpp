@@ -15,7 +15,6 @@ std::string FileSelector::OpenFileSelectDialog(const std::string& filterName, co
     ofn.lpstrFile[0] = '\0';
     ofn.nMaxFile = sizeof(szFile);
 
-    // 필터 문자열 생성
     std::string filterStr;
     std::string extensionStr;
     
@@ -35,7 +34,6 @@ std::string FileSelector::OpenFileSelectDialog(const std::string& filterName, co
                                 filterStr.length() + 1,
                                 wideFilter.data(), wideFilter.size());
 
-    // 필터 설정
     ofn.lpstrFilter = wideFilter.data();
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = nullptr;
@@ -43,7 +41,6 @@ std::string FileSelector::OpenFileSelectDialog(const std::string& filterName, co
     ofn.lpstrInitialDir = nullptr;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
-    // 다이얼로그 표시
     if (GetOpenFileName(&ofn))
     {
         int size_needed = WideCharToMultiByte(CP_UTF8, 0, ofn.lpstrFile, -1, nullptr, 0, nullptr, nullptr);

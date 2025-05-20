@@ -13,7 +13,6 @@ SystemTrayManager::SystemTrayManager(HWND hWnd, HICON hIcon, const std::string& 
     nid.uCallbackMessage = WM_TRAYICON;
     nid.hIcon = hIcon;
     
-    // 툴팁 설정
     std::wstring wTooltip(tooltip.begin(), tooltip.end());
     wcsncpy_s(nid.szTip, wTooltip.c_str(), _TRUNCATE);
 }
@@ -73,15 +72,9 @@ void SystemTrayManager::ShowContextMenu()
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, 1, L"Open");
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, 2, L"Exit");
         
-        // 기본 메뉴 항목 설정
         SetMenuDefaultItem(hMenu, 1, FALSE);
-        
-        // 포그라운드 창으로 설정
         SetForegroundWindow(hWnd);
-        
-        // 컨텍스트 메뉴 표시
         TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, nullptr);
-        
         DestroyMenu(hMenu);
     }
 }

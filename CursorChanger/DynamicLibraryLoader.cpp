@@ -5,6 +5,10 @@
 std::unordered_map<std::wstring, HMODULE> DynamicLibraryLoader::loadedModules;
 std::unordered_map<std::string, FARPROC> DynamicLibraryLoader::loadedFunctions;
 
+DynamicLibraryLoader::DynamicLibraryLoader()
+{
+}
+
 DynamicLibraryLoader::~DynamicLibraryLoader()
 {
     UnloadAllLibraries();
